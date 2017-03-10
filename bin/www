@@ -7,6 +7,8 @@
 var app = require('../app');
 var debug = require('debug')('chatserver:server');
 var http = require('http');
+var jwt = require('jsonwebtoken');
+var config = require("../config/config.json");
 
 /**
  * Get port from environment and store in Express.
@@ -29,13 +31,39 @@ server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
 
+
+// ORM Sync
+var models = require("../models");
+
+models.sequelize.sync().then(function () {
+});
+
 // Socket IO Setting
 var socket = require('socket.io').listen(server);
 socket.on('connection', function(connection) {
+
+  models.Message.findAll({include: {model:models.User, attributes: ['id','Nickname']}}).then(function (messages) {
+    var messageLength = messages.length;
+    console.log(JSON.stringify(messages));
+    for (var i = 0; i < messageLength; i++) {
+        socket.emit('message', {userId:messages[i].User.id, nickname:messages[i].User.Nickname, msg:messages[i].Message});
+    }
+
+  });
     console.log('User Connected');
-    connection.on('message', function(msg){
-        socket.emit('message', msg);
+    connection.on('message', function(data){
+        jwt.verify(data.jwt, config.jwtSecret, function(err, decoded) {
+            if (err) {
+                console.log('socket.io jwt error : ' + err);
+                return;
+            }
+
+            models.Message.create({Message: data.msg, UserId: decoded.id});
+            socket.emit('message', {userId:decoded.id, nickname:decoded.nickname, msg:data.msg});
+
+        });
     });
+
 });
 
 /**
