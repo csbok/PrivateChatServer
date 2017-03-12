@@ -39,20 +39,51 @@ models.sequelize.sync().then(function () {
 });
 
 // Socket IO Setting
-var socket = require('socket.io').listen(server);
-socket.on('connection', function(connection) {
-
-  models.Message.findAll({include: {model:models.User, attributes: ['id','Nickname']}}).then(function (messages) {
-    var messageLength = messages.length;
-    console.log(JSON.stringify(messages));
-    for (var i = 0; i < messageLength; i++) {
-        socket.emit('message', {userId:messages[i].User.id, nickname:messages[i].User.Nickname, msg:messages[i].Message});
-    }
-
-  });
+var io = require('socket.io').listen(server);
+io.sockets.on('connection', function(socket) {
     console.log('User Connected');
-    connection.on('message', function(data){
+
+    socket.on('disconnect', function() {
+        var sockName = '';
+        if (socket.nickname)
+            sockName = socket.nickname;
+
+        console.log(sockName + ' disconnected');
+    });
+
+    socket.on('join', function(data) {
         jwt.verify(data.jwt, config.jwtSecret, function(err, decoded) {
+            if (err) {
+                console.log('socket.io jwt error : ' + err);
+                return;
+            }
+
+            socket.join(data.room);
+            socket.userId = decoded.id;
+            socket.nickname = decoded.nickname;
+            socket.room = data.room;
+
+            models.Message.findAll({include: {model:models.User, attributes: ['id','Nickname']}, where: {RoomId: data.room}}).then(function (messages) {
+                var messageLength = messages.length;
+                console.log(JSON.stringify(messages));
+                for (var i = 0; i < messageLength; i++) {
+                    socket.emit('message', {userId:messages[i].User.id, nickname:messages[i].User.Nickname, message:messages[i].Message});
+                }
+            });
+        }); // jwt
+    }); // socket join
+
+    socket.on('leave', function(data) {
+        var sockName = '';
+        if (socket.nickname)
+            sockName = socket.nickname;
+
+        console.log(sockName + ' : leave from ' + data.room);
+        socket.leave(data.room);
+    });
+
+    socket.on('message', function(data){
+/*        jwt.verify(data.jwt, config.jwtSecret, function(err, decoded) {
             if (err) {
                 console.log('socket.io jwt error : ' + err);
                 return;
@@ -60,8 +91,10 @@ socket.on('connection', function(connection) {
 
             models.Message.create({Message: data.msg, UserId: decoded.id});
             socket.emit('message', {userId:decoded.id, nickname:decoded.nickname, msg:data.msg});
-
-        });
+      });
+      */
+        io.sockets.in(socket.room).emit('message', {userId: socket.userId, nickname: socket.nickname, message: data.message, date: new Date().toISOString()});
+        models.Message.create({Message: data.message, UserId: socket.userId, RoomId: socket.room});
     });
 
 });
