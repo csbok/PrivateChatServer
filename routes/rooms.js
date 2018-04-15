@@ -68,5 +68,25 @@ router.post('/', auth.loginCheck, function(req ,res) {
     });
 });
 
+router.put('/:roomId', auth.loginCheck, function (req, res) {
+    // TODO: 방안에 속한 멤버가 맞는지 확인하는 로직 필요 (권한 체크도 필요)
+    models.Room.findById(req.params.roomId).then(function(room) {
+        return room.update({Title: req.body.Title});
+    }).then(function() {
+       res.status(200).end();
+    });
+});
+
+router.delete('/:roomId', auth.loginCheck, function(req, res) {
+    models.RoomEntry.findOne({
+        where: {RoomId: req.params.roomId, UserId: req.jwt.id}
+    }).then(function(entry) {
+        return entry.destroy();
+    }).then(function() {
+        res.status(200).end();
+    });
+});
+
+
 
 module.exports = router;

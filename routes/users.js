@@ -6,6 +6,10 @@ var crypto = require('crypto');
 
 var models = require("../models");
 var config = require("../config/config.json");
+var auth = require("../utils/auth");
+
+var multer  = require('multer');
+var fs = require('fs');
 
 /* GET users listing. */
 router.get('/', function(req, res, next) {
@@ -52,6 +56,26 @@ router.post('/login', function(req, res) {
         });
     });
 });
+
+router.post('/avatar', multer({ dest: 'public/avatar/' }).single('photo'), function (req, res, next) {
+ //   resize(40,40,  __dirname +'/../uploads/avatar/' + req.file.filename, __dirname +'/../uploads/avatar_resize/' + req.file.filename, function() {
+        res.status(200).send(req.file);
+//    });
+});
+
+router.put('/avatar', auth.loginCheck, function(req, res) {
+    models.User.findById(req.jwt.id).then(function (user) {
+        if (user.avatarFilename && user.avatarFilename != 'default.png') {
+            fs.unlink('public/avatar/'+user.avatarFilename, function(err) {
+//        if (err) throw err;
+            });
+        }
+
+        user.updateAttributes({avatarFilename: req.body.avatar});
+        res.status(200).end();
+    });
+});
+
 
 
 module.exports = router;

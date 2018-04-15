@@ -41,7 +41,7 @@ models.sequelize.sync().then(function () {
 // Socket IO Setting
 var io = require('socket.io').listen(server);
 io.sockets.on('connection', function(socket) {
-    console.log('User Connected');
+    console.log('User Connected / id : ' + socket.id);
 
     socket.on('disconnect', function() {
         var sockName = '';
@@ -63,7 +63,12 @@ io.sockets.on('connection', function(socket) {
             socket.nickname = decoded.nickname;
             socket.room = data.room;
 
-            models.Message.findAll({include: {model:models.User, attributes: ['id','Nickname']}, where: {RoomId: data.room}}).then(function (messages) {
+            models.Message.count({where: {RoomId: data.room}}).then(function(c) {
+                var offset = c-10;
+                if (offset < 0)
+                    offset = 0;
+                return models.Message.findAll({include: {model:models.User, attributes: ['id','Nickname']}, where: {RoomId: data.room}, offset:offset, limit:10});
+            }).then(function (messages) {
                 var messageLength = messages.length;
                 console.log(JSON.stringify(messages));
                 for (var i = 0; i < messageLength; i++) {
